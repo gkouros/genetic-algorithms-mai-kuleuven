@@ -4,9 +4,6 @@
 problem
 """
 
-__author__ = 'Georgios Kouros'
-__license__ = 'BSDv3'
-
 import numpy as np
 import matplotlib
 from matplotlib import pyplot as plt
