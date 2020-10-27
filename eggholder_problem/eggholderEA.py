@@ -8,8 +8,12 @@ __author__ = 'Georgios Kouros'
 __license__ = 'BSDv3'
 
 import numpy as np
+import matplotlib
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import random
+
+matplotlib.use('Qt5Agg')
 
 
 def egg_holder_ea() -> None:
@@ -25,11 +29,10 @@ def egg_holder_ea() -> None:
     population = int_max * np.random.rand(lambda_, 2)
 
     plot_population(population, int_max)
-    return
 
     for idx in range(0, 20):
-        selected = selection(population, k)
-        offspring = crossover(selected)
+        selected = selection(population, k, lambda_)
+        offspring = crossover(selected, lambda_, int_max)
         joined_population = np.vstack((mutation(offspring, alpha, int_max),
                                        population))
         population = elimination(joined_population, lambda_)
@@ -64,41 +67,42 @@ def plot_population(population: np.array, int_max: int) -> None:
         population (np.array): The population to plot
         int_max (int): Boundary
     """
-    x = np.linspace(0, int_max, 500).reshape((-1, 1))
-    y = np.linspace(0, int_max, 500).reshape((-1, 1))
-    F = -y.T * np.sin(np.sqrt(np.abs(x + y.T))) - x * np.sin(np.sqrt(np.abs(x - y.T)))
-
-    Y, X = np.meshgrid(x, y)
-
+    x = np.linspace(0, int_max, 500).reshape(-1)
+    y = np.linspace(0, int_max, 500).reshape(-1)
+    X, Y = np.meshgrid(x, y)
+    F = -Y * np.sin(np.sqrt(np.abs(X + Y))) - X * np.sin(np.sqrt(np.abs(X - Y)))
 
     fig = plt.figure(1)
     ax = fig.gca(projection='3d')
+    ax.view_init(elev=72, azim=-137)
+    plt.cla()
     ax.plot_surface(X, Y, F,
                     rstride=8, cstride=8, shade=False, cmap="jet", linewidth=1, alpha=0.5)
     ax.scatter(population[:, 0],
                population[:, 1],
-               objf(population)+1e-1, color='red')
+               objf(population) + 50, color='red')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Objective Funtion')
-    ax.view_init(elev=80, azim=-135)
 
+    plt.ion()
     plt.show()
+    plt.pause(0.01)
 
 
-def selection(population: np.array, k: int) -> np.array:
+def selection(population: np.array, k: int, lambda_: float) -> np.array:
     """ Perform k-tournament selection to select pairs of parents """
-    selected = zeros(2 * len(population), 2)
+    selected = np.zeros((2 * len(population), 2))
 
     for idx in range(0, 2 * lambda_):
-        ri = randperm(lambda_, k)  # TODO replace
-        _, mi = objf(population[ri, :]).min()
+        ri = random.sample(range(0, lambda_), k)
+        mi = np.argmin(objf(population[ri, :]))
         selected[idx, :] = population[ri[mi], :]
 
     return selected
 
 
-def crossover(selected: np.array) -> np.array:
+def crossover(selected: np.array, lambda_: int, int_max: int) -> np.array:
     """ Perform crossover as in the slides
 
     Args:
@@ -108,15 +112,15 @@ def crossover(selected: np.array) -> np.array:
         np.array: The offsprings produced from the crossover operation
     """
     weights = 3 * np.random.rand(lambda_, 2) - 1
-    offspring = np.zeros(lambda_, 2)
+    offspring = np.zeros((lambda_, 2))
 
-    for idx in range(1, len(offspring)):
-        offspring[idx, 0] = min(int_max, max(0, selected[2 * idx - 1, 0]) + \
-                weights[idx, 0] *\
-                (selected[2 * idx, 0] - selected[2 * idx - 1, 0]))
-        offspring[idx, 1] = min(int_max, max(0, selected[2 * idx - 1, 1]) + \
+    for idx in range(len(offspring)):
+        offspring[idx, 0] = min(int_max, max(0, selected[2 * idx, 0] + \
+                weights[idx, 0] * \
+                (selected[2 * idx + 1, 0] - selected[2 * idx, 0])))
+        offspring[idx, 1] = min(int_max, max(0, selected[2 * idx, 1] + \
                 weights[idx, 1] *\
-                (selected[2 * idx, 1] - selected[2 * idx - 1, 1]))
+                (selected[2 * idx + 1, 1] - selected[2 * idx, 1])))
 
     return offspring
 
@@ -131,13 +135,13 @@ def mutation(offspring: np.array, alpha: float, int_max: int) -> np.array:
     Returns:
         np.array: Mutated offspring
     """
-    indices = np.random.rand(len(offspring), 1) <= alpha
+    indices = np.where(np.random.rand(len(offspring), 1) <= alpha)[0]
     offspring[indices, :] = offspring[indices, :] + \
-        10 * np.random.rand(len(indices, 2))
-    offspring[indices, 0] = min(int_max, max(0, offspring[indices, 0]))
-    offspring[indices, 1] = min(int_max, max(0, offspring[indices, 1]))
+        10 * np.random.randn(len(indices), 2)
+    offspring[indices, 0] = min(int_max, max(0, max(offspring[indices, 0])))
+    offspring[indices, 1] = min(int_max, max(0, max(offspring[indices, 1])))
 
-    return mutation
+    return offspring
 
 
 def elimination(joined_population: np.array, keep: int) -> np.array:
@@ -151,8 +155,8 @@ def elimination(joined_population: np.array, keep: int) -> np.array:
         np.array: The samples that survived the elimination process
     """
     fvals = objf(joined_population)
-    _, perm = fvals.sort()
-    survivors = joined_population[perm[1:keep], :]
+    perm = np.argsort(fvals)
+    survivors = joined_population[perm[0:keep], :]
 
     return survivors
 
